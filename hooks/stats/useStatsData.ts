@@ -32,7 +32,7 @@ export function useStatsData({ role, orgId }: UseStatsDataProps) {
             const snap = await getDocs(q)
             return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Patient[]
         },
-        enabled: !!(role && (isAdmin || orgId)),
+        enabled: !!(role && (isAdmin || (isPatientRole && !!orgId))),
         staleTime: 60 * 1000,
     })
 
@@ -141,58 +141,22 @@ export function useStatsData({ role, orgId }: UseStatsDataProps) {
             count,
         }))
 
-        // Treatment Outcome Funnel
-        const funnelData = [
-            {
-                name: 'Registered',
-                value: patients.filter(p => !!p.hospitalRegistrationDate).length,
-            },
-            {
-                name: 'Treatment Started',
-                value: patients.filter(p => !!p.treatmentStartDate).length,
-            },
-            {
-                name: 'Treatment Completed',
-                value: patients.filter(p => !!p.treatmentEndDate).length,
-            },
-            {
-                name: 'Follow-up Recorded',
-                value: patients.filter(p => (p.followUps?.length ?? 0) > 0).length,
-            },
-            {
-                name: 'Alive at Last Update',
-                value: patients.filter(p => p.patientStatus === 'Alive').length,
-            },
-        ]
-        return {
-            total,
-            alive,
-            deceased,
-            notAvailable,
-            male,
-            female,
-            other,
-            withAsha,
-            withoutAsha: total - withAsha,
-            diseaseData,
-            stageData,
-            insuranceData,
-            rationData,
-            registrationTrend,
-            statusData: [
-                { name: 'Alive', value: alive },
-                { name: 'Not Alive', value: deceased },
-                { name: 'Not Available', value: notAvailable },
-            ].filter((d) => d.value > 0),
-            genderData: [
-                { name: 'Male', value: male },
-                { name: 'Female', value: female },
-                { name: 'Other', value: other },
-            ].filter((d) => d.value > 0),
-            funnelData,
+        // Treatment Outcome Funnel — single pass for efficiency
+        let registered = 0, treatmentStarted = 0, treatmentCompleted = 0, followUpRecorded = 0, aliveAtLastUpdate = 0
+        for (const p of patients) {
+            if (p.hospitalRegistrationDate) registered++
+            if (p.treatmentStartDate) treatmentStarted++
+            if (p.treatmentEndDate) treatmentCompleted++
+            if ((p.followUps?.length ?? 0) > 0) followUpRecorded++
+            if (p.patientStatus === 'Alive') aliveAtLastUpdate++
         }
-    }, [patients])
-
+        const funnelData = [
+            { name: 'Registered',          value: registered },
+            { name: 'Treatment Started',   value: treatmentStarted },
+            { name: 'Treatment Completed', value: treatmentCompleted },
+            { name: 'Follow-up Recorded',  value: followUpRecorded },
+            { name: 'Alive at Last Update',value: aliveAtLastUpdate },
+        ]
     // ── Derived admin stats ───────────────────────────────────────────
     const adminStats = useMemo(() => {
         if (!isAdmin) return null
